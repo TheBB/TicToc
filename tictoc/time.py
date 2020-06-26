@@ -2,8 +2,9 @@ from datetime import datetime, timedelta
 from operator import methodcaller
 from time import timezone, altzone
 
-from tzlocal import get_localzone
+import numpy as np
 from pytz import utc
+from tzlocal import get_localzone
 
 from .util import ConversionGraph
 
@@ -76,11 +77,28 @@ def tt_to_tai(dt):
 @convert_timescale.register('tt', 'tcg')
 def tt_to_tcg(dt):
     # Explanatory Supplement to the Astronomical Almanac, 3rd edition, Eq. 3.27
-    jdtai = convert_timescale.convert('tt', 'jdtai', dt)
+    jdtai = convert_timescale('tt', 'jdtai', dt)
     diff = 6.969_290_134e-10 * (jdtai - 2_443_144.5) * 86400
     return dt + timedelta(seconds=diff)
 
-for scale in ('tt', 'tai', 'tcg'):
+def tdb_tt(dt):
+    # TDB - TT, Astronomical Almanac 2016, page B7
+    jd = datetime_to_julian(dt)
+    g = 357.53 + 0.985_600_28 * (jd - 2_451_545)
+    diff = np.sin(np.deg2rad(g)) * 0.001_656_67
+    dL = 246.11 + 0.902_517_92 * (jd - 2_451_545)
+    diff += np.sin(np.deg2rad(dL)) * 0.000_022_42
+    return timedelta(seconds=diff)
+
+@convert_timescale.register('tt', 'tdb')
+def tt_to_tdb(dt):
+    return dt + tdb_tt(dt)
+
+@convert_timescale.register('tdb', 'tt')
+def tdb_to_tt(dt):
+    return dt - tdb_tt(dt)
+
+for scale in ('tt', 'tai', 'tcg', 'tdb'):
     convert_timescale.register(scale, f'jd{scale}')(datetime_to_julian)
     convert_timescale.register(f'jd{scale}', scale)(julian_to_datetime)
     convert_timescale.register(f'jd{scale}', f'mjd{scale}')(julian_to_modified)
@@ -104,13 +122,13 @@ class Time:
     def toscale(self, scale):
         if scale == self._scale:
             return self
-        dt = convert_timescale.convert(self._scale, scale, self._dt)
+        dt = convert_timescale(self._scale, scale, self._dt)
         return Time(dt, scale)
 
 for scale in ['local', 'utc']:
     setattr(Time, scale, property(methodcaller('toscale', scale)))
 
-for scale in ['tt', 'tai', 'tcg']:
+for scale in ['tt', 'tai', 'tcg', 'tdb']:
     setattr(Time, scale, property(methodcaller('toscale', scale)))
     setattr(Time, f'jd{scale}', property(methodcaller('toscale', f'jd{scale}')))
     setattr(Time, f'mjd{scale}', property(methodcaller('toscale', f'mjd{scale}')))

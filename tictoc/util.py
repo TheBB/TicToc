@@ -11,6 +11,7 @@ class ConversionGraph:
     def register(self, src, tgt):
         def decorator(func):
             self._graph.setdefault(src, {})[tgt] = func
+            self._graph.setdefault(tgt, {})
             return func
         return decorator
 
@@ -33,7 +34,7 @@ class ConversionGraph:
 
         raise ValueError(f'Unable to find a conversion path {src} -> {tgt}')
 
-    def convert(self, src, tgt, srcval):
+    def __call__(self, src, tgt, srcval):
         path = self.find_path(src, tgt)
         for a, b in zip(path, islice(path, 1, None)):
             srcval = self._graph[a][b](srcval)

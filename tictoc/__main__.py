@@ -22,3 +22,6 @@ def test():
     print(now.tcg)
     print(now.jdtcg)
     print(now.mjdtcg)
+    print(now.tdb)
+    print(now.jdtdb)
+    print(now.mjdtdb)
